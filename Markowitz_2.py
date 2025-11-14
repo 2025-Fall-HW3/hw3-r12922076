@@ -51,7 +51,7 @@ class MyPortfolio:
     NOTE: You can modify the initialization function
     """
 
-    def __init__(self, price, exclude, lookback=50, gamma=0):
+    def __init__(self, price, exclude, lookback=236, gamma=0):
         self.price = price
         self.returns = price.pct_change().fillna(0)
         self.exclude = exclude
@@ -70,8 +70,44 @@ class MyPortfolio:
         """
         TODO: Complete Task 4 Below
         """
-        
-        
+
+        def mv_opt(R_n):
+            mu = R_n.mean().values
+            n = len(R_n.columns)
+
+            with gp.Env(empty=True) as env:
+                env.setParam("OutputFlag", 0)
+                env.setParam("DualReductions", 0)
+                env.start()
+                with gp.Model(env=env, name="portfolio") as model:
+
+                    # Add variables: x[i] denotes the proportion of capital invested in stock i
+                    w = model.addMVar(len(mu), name="w")
+
+                    # Budget constraint: all investments sum up to 1
+                    model.addConstr(w.sum() == 1, name="Budget_Constraint")
+
+                    # Define objective function: Maximize expected utility
+                    model.setObjective(mu @ w, gp.GRB.MAXIMIZE)
+
+                    model.optimize()
+
+                    if model.status == gp.GRB.INFEASIBLE:
+                        print("Model is infeasible.")
+                    elif model.status == gp.GRB.INF_OR_UNBD:
+                        print("Model is infeasible or unbounded.")
+
+                    if model.status in (gp.GRB.OPTIMAL, gp.GRB.SUBOPTIMAL):
+                        return w.X.tolist()
+                    else:
+                        print(f"Model status: {model.status}")
+                        return [1.0 / n] * n
+
+        rets = self.returns[assets]
+        for i in range(self.lookback + 1, len(rets)):
+            R_n = rets.iloc[i - self.lookback : i]
+            self.portfolio_weights.loc[rets.index[i], assets] = mv_opt(R_n)
+
         """
         TODO: Complete Task 4 Above
         """
